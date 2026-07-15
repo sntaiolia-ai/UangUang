@@ -307,11 +307,19 @@ window.executeConfirm = function() {
             }
             
             showToast('Dompet berhasil dihapus.');
-        } else if (actionType === 'deleteTx') {
+       } else if (actionType === 'deleteTx') {
             const tx = state.transactions.find(t => t.id === targetId);
             if (tx) revertTransactionImpact(tx);
+            
+            // 1. Hapus dari array state lokal (Kode asli Anda)
             state.transactions = state.transactions.filter(t => t.id !== targetId);
             state.selectedTransactionId = null;
+            
+            // 2. HUBUNGKAN KE FIREBASE UNTUK HAPUS DI SERVER
+            if (typeof window.deleteTransactionFromFirebase === 'function') {
+                window.deleteTransactionFromFirebase(targetId);
+            }
+            
             showToast('Transaksi berhasil dihapus.');
         } else if (actionType === 'deleteSub') {
             state.budget.subcategories = state.budget.subcategories.filter(s => s.id !== targetId);
@@ -546,6 +554,15 @@ window.executeConfirm = function() {
             showToast('Transaksi baru berhasil ditambahkan!');
         }
 
+// --- KODE INTEGRASI FIREBASE ---
+    if (typeof window.syncTransactionToFirebase === 'function') {
+        window.syncTransactionToFirebase(data.id, data);
+    }
+    // -------------------------------
+    
+    state.modal.show = false;
+    render();
+    
         state.txModal.show = false;
         render();
     };
@@ -3313,6 +3330,63 @@ async function deleteWalletFromFirebase(idDompet) {
 }
 // Daftarkan ke window agar bisa dipanggil dari fungsi asli Anda
 window.deleteWalletFromFirebase = deleteWalletFromFirebase;
+
+// 1. Fungsi untuk Menyimpan/Mengubah Transaksi di Firebase
+async function syncTransactionToFirebase(idTx, dataTx) {
+    try {
+        const { doc, setDoc } = await import("https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js");
+        await setDoc(doc(db, "transactions", idTx), {
+            ...dataTx,
+            waktuSinkronisasi: new Date().toISOString()
+        });
+        console.log("Firebase: Transaksi berhasil disinkronkan!");
+    } catch (e) {
+        console.error("Firebase Error: Gagal sinkronisasi transaksi:", e);
+    }
+}
+
+// 2. Fungsi untuk Menghapus Transaksi dari Firebase
+async function deleteTransactionFromFirebase(idTx) {
+    try {
+        const { doc, deleteDoc } = await import("https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js");
+        await deleteDoc(doc(db, "transactions", idTx));
+        console.log("Firebase: Transaksi berhasil dihapus secara permanen!");
+    } catch (e) {
+        console.error("Firebase Error: Gagal menghapus transaksi:", e);
+    }
+}
+
+// 3. Fungsi Otomatis untuk Memuat Semua Transaksi saat Reload
+async function loadTransactionsFromFirebase() {
+    try {
+        const { getDocs, collection } = await import("https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js");
+        const querySnapshot = await getDocs(collection(db, "transactions"));
+        
+        let firebaseTxs = [];
+        querySnapshot.forEach((doc) => {
+            firebaseTxs.push(doc.data());
+        });
+
+        if (firebaseTxs.length > 0) {
+            // Masukkan ke state lokal Anda
+            state.transactions = firebaseTxs;
+            if (typeof render === 'function') {
+                render();
+            }
+            console.log("Firebase: Berhasil memuat " + firebaseTxs.length + " transaksi dari database!");
+        }
+    } catch (e) {
+        console.error("Firebase Error: Gagal memuat transaksi:", e);
+    }
+}
+
+// Daftarkan ke window agar bisa dipanggil dari skrip utama Anda
+window.syncTransactionToFirebase = syncTransactionToFirebase;
+window.deleteTransactionFromFirebase = deleteTransactionFromFirebase;
+
+// Jalankan pengambilan transaksi otomatis saat aplikasi dibuka
+loadTransactionsFromFirebase();
+
 </script>
 
 </body>
