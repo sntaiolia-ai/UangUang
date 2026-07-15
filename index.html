@@ -237,53 +237,57 @@
         }
     };
 
-    window.saveWallet = function(e) {
-        e.preventDefault();
-        const type = document.getElementById('m-type').value;
-        let bal = parseFloat(document.getElementById('m-bal').value) || 0;
-        
-        if (type === 'Kartu Kredit' || type === 'PayLater') {
-            bal = -Math.abs(bal);
-        }
-
-        const data = {
-            type: type,
-            name: document.getElementById('m-name').value.trim(),
-            balance: bal,
-            accountNumber: document.getElementById('m-acc').value.trim(),
-            lastCheck: new Date().toISOString().split('T')[0]
-        };
-
-        if (type === 'Bank') {
-            data.reserveName = document.getElementById('m-res-n').value.trim();
-            data.reserveAmount = parseFloat(document.getElementById('m-res-v').value) || 0;
-            data.limit = 0; data.dueDate = '';
-        } else if (type === 'Kartu Kredit' || type === 'PayLater') {
-            data.limit = parseFloat(document.getElementById('m-lim').value) || 0;
-            data.dueDate = document.getElementById('m-due').value.trim();
-            data.reserveName = ''; data.reserveAmount = 0;
-        } else {
-            data.reserveName = ''; data.reserveAmount = 0; data.limit = 0; data.dueDate = '';
-        }
-
-        if (state.modal.mode === 'add') {
-            data.id = 'w_' + Date.now();
-            state.wallets.push(data);
-            showToast(`Dompet "${data.name}" berhasil ditambahkan!`);
-        } else {
-            const idx = state.wallets.findIndex(x => x.id === state.modal.walletId);
-            if (idx !== -1) {
-                state.wallets[idx] = { ...state.wallets[idx], ...data };
-                showToast(`Detail dompet "${data.name}" diperbarui!`);
-            }
-        }
-        if (typeof window.syncWalletToFirebase === 'function') {
-        window.syncWalletToFirebase(data.id, data);
+window.saveWallet = function(e) {
+    e.preventDefault();
+    const type = document.getElementById('m-type').value;
+    let bal = parseFloat(document.getElementById('m-bal').value) || 0;
+    if (type === 'Kartu Kredit' || type === 'PayLater') {
+        bal = -Math.abs(bal);
     }
-        state.modal.show = false;
-        render();
+
+    const data = {
+        type: type,
+        name: document.getElementById('m-name').value.trim(),
+        balance: bal,
+        accountNumber: document.getElementById('m-acc').value.trim(),
+        lastCheck: new Date().toISOString().split('T')[0]
     };
 
+    if (type === 'Bank') {
+        data.reserveName = document.getElementById('m-res-n').value.trim();
+        data.reserveAmount = parseFloat(document.getElementById('m-res-v').value) || 0;
+        data.limit = 0; data.dueDate = '';
+    } else if (type === 'Kartu Kredit' || type === 'PayLater') {
+        data.limit = parseFloat(document.getElementById('m-lim').value) || 0;
+        data.dueDate = document.getElementById('m-due').value.trim();
+        data.reserveName = ''; data.reserveAmount = 0;
+    } else {
+        data.reserveName = ''; data.reserveAmount = 0; data.limit = 0;
+        data.dueDate = '';
+    }
+
+    if (state.modal.mode === 'add') {
+        data.id = 'w_' + Date.now();
+        state.wallets.push(data);
+        showToast(`Dompet "${data.name}" berhasil ditambahkan!`);
+    } else {
+        data.id = state.modal.walletId;
+        const idx = state.wallets.findIndex(x => x.id === state.modal.walletId);
+        if (idx !== -1) {
+            state.wallets[idx] = { ...state.wallets[idx], ...data };
+            showToast(`Detail dompet "${data.name}" diperbarui!`);
+        }
+    }
+    
+    // --- HANYA BARIS INI YANG TERHUBUNG KE FIREBASE ---
+    if (typeof window.syncWalletToFirebase === 'function') {
+        window.syncWalletToFirebase(data.id, data);
+    }
+    // --------------------------------------------------
+    
+    state.modal.show = false;
+    render();
+};
     window.cancelConfirm = function() {
         state.confirmDialog.show = false;
         render();
@@ -3223,6 +3227,7 @@ async function simpanDompetKeFirebase(namaDompet, saldo) {
 }
 window.simpanDompetKeFirebase = simpanDompetKeFirebase;
 // Fungsi pembantu untuk menyimpan/mengubah data dompet di Firebase
+
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
   import { getFirestore, doc, setDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
@@ -3242,7 +3247,7 @@ window.simpanDompetKeFirebase = simpanDompetKeFirebase;
   window.db = db;
   console.log("Firebase Database sudah terhubung!");
 
-  // Fungsi sinkronisasi aman yang dipanggil dari luar
+  // Fungsi sinkronisasi aman yang dipanggil dari fungsi saveWallet asli Anda
   async function syncWalletToFirebase(idDompet, dataDompet) {
       try {
           await setDoc(doc(db, "wallets", idDompet), {
@@ -3254,9 +3259,10 @@ window.simpanDompetKeFirebase = simpanDompetKeFirebase;
           console.error("Firebase Error:", e);
       }
   }
+  
+  // Daftarkan ke window agar bisa dibaca oleh skrip biasa
   window.syncWalletToFirebase = syncWalletToFirebase;
 </script>
- </script>
 
 </body>
 </html>
