@@ -293,12 +293,19 @@ window.saveWallet = function(e) {
         render();
     };
 
-    window.executeConfirm = function() {
+window.executeConfirm = function() {
         const { actionType, targetId } = state.confirmDialog;
         
         if (actionType === 'deleteWallet') {
+            // 1. Hapus dari array state lokal (Kode asli Anda)
             state.wallets = state.wallets.filter(w => w.id !== targetId);
             state.selectedWalletId = null;
+            
+            // 2. HUBUNGKAN KE FIREBASE UNTUK HAPUS DI SERVER
+            if (typeof window.deleteWalletFromFirebase === 'function') {
+                window.deleteWalletFromFirebase(targetId);
+            }
+            
             showToast('Dompet berhasil dihapus.');
         } else if (actionType === 'deleteTx') {
             const tx = state.transactions.find(t => t.id === targetId);
@@ -321,7 +328,6 @@ window.saveWallet = function(e) {
         state.confirmDialog.show = false;
         render();
     };
-
     // --- STREAMING_CHUNK: Transaction balance calculations... ---
     function applyTransactionImpact(tx) {
         if (tx.type === 'Pengeluaran') {
@@ -3292,6 +3298,21 @@ async function loadWalletsFromFirebase() {
 
 // Jalankan fungsi ini otomatis setiap kali halaman web dibuka/di-reload
 loadWalletsFromFirebase();
+
+// Fungsi untuk menghapus dompet dari Firebase berdasarkan ID-nya
+async function deleteWalletFromFirebase(idDompet) {
+    try {
+        const { doc, deleteDoc } = await import("https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js");
+        
+        // Hapus dokumen di koleksi "wallets" yang memiliki ID sesuai idDompet
+        await deleteDoc(doc(db, "wallets", idDompet));
+        console.log("Firebase: Dompet dengan ID " + idDompet + " berhasil dihapus secara permanen!");
+    } catch (e) {
+        console.error("Firebase Error: Gagal menghapus dompet:", e);
+    }
+}
+// Daftarkan ke window agar bisa dipanggil dari fungsi asli Anda
+window.deleteWalletFromFirebase = deleteWalletFromFirebase;
 </script>
 
 </body>
