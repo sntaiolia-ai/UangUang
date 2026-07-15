@@ -3168,5 +3168,26 @@
     render();
 </script>
 
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+  import { getFirestore } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyDSvZ7i-GZQjNP9r02oOFn38Mr0sGTp46Q",
+    authDomain: "uanguang-c7a10.firebaseapp.com",
+    projectId: "uanguang-c7a10",
+    storageBucket: "uanguang-c7a10.firebasestorage.app",
+    messagingSenderId: "651490267003",
+    appId: "1:651490267003:web:4e730fe905d3f3bdc7b7de"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const db = getFirestore(app);
+  
+  // Menjadikan db bisa diakses oleh fungsi-fungsi asli Anda
+  window.db = db;
+  console.log("Firebase Database sudah terhubung!");
+</script>
+
 </body>
 </html>
