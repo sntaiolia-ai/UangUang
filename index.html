@@ -1143,7 +1143,7 @@
                 <div class="flex justify-between items-center text-left">
                     <div>
                         <h1 class="font-heading font-extrabold text-3xl tracking-tight text-brand-textDark">Dashboard</h1>
-                        <p class="text-brand-textMuted text-xs mt-0.5 font-semibold">Halo, Trisna 🍌</p>
+                        <p class="text-brand-textMuted text-xs mt-0.5 font-semibold">Halo, Kay 🍌</p>
                     </div>
                     <!-- ACTIVE PERIOD -->
                     <div class="bg-white border border-brand-border px-3.5 py-1.5 rounded-xl shadow-sm flex items-center gap-2">
@@ -1359,7 +1359,7 @@
                             <div class="w-8 h-8 rounded-full bg-brand-lime flex items-center justify-center font-bold text-brand-textDark text-xs">
                                 T
                             </div>
-                            <span class="font-semibold text-brand-textDark">Trisna</span>
+                            <span class="font-semibold text-brand-textDark">Kay</span>
                         </div>
                         <span class="bg-brand-bgLight px-2 py-1 rounded text-[10px] font-bold">PRO</span>
                     </div>
@@ -3186,6 +3186,21 @@
   
   // Menjadikan db bisa diakses oleh fungsi-fungsi asli Anda
   window.db = db;
+  // Tes menyimpan data ke Firebase
+import { collection, addDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+async function tesDatabase() {
+  try {
+    const docRef = await addDoc(collection(db, "tes_koneksi"), {
+      pesan: "Halo Firebase!",
+      tanggal: new Date()
+    });
+    console.log("Data berhasil masuk ke Firebase dengan ID: ", docRef.id);
+  } catch (e) {
+    console.error("Gagal menyimpan data: ", e);
+  }
+}
+tesDatabase();
   console.log("Firebase Database sudah terhubung!");
 </script>
 
