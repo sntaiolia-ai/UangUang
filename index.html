@@ -3183,6 +3183,7 @@
 
   const app = initializeApp(firebaseConfig);
   const db = getFirestore(app);
+  console.log("Firebase Database sudah terhubung!");
   
   // Menjadikan db bisa diakses oleh fungsi-fungsi asli Anda
   window.db = db;
