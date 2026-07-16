@@ -121,10 +121,7 @@
         debtModal: { show: false, mode: 'add', type: 'utang', debtId: null },
 
         confirmDialog: { show: false, title: '', message: '', actionType: '', targetId: null, extraId: null },
-        toastMessage: null,
-
-        // State layar login (tidak disimpan ke Firestore)
-        auth: { mode: 'login', error: null, loading: false }
+        toastMessage: null
     };
 
     // --- STREAMING_CHUNK: Firebase Setup & Cloud Sync... ---
@@ -145,7 +142,6 @@
     const PERSISTED_KEYS = ['wallets', 'transactions', 'goals', 'debts', 'budget'];
 
     let currentUid = null;
-    let currentUserProfile = { name: '', email: '' };
     let isDataLoaded = false; // Cegah auto-save menimpa data cloud sebelum data awal selesai dimuat
     let saveDebounceTimer = null;
 
@@ -205,187 +201,22 @@
         `;
     }
 
-    // Pantau status login. onAuthStateChanged otomatis dipanggil saat pertama load
-    // (mengecek sesi tersimpan di browser) dan setiap kali login/logout terjadi.
+    // Masuk secara anonim (UID disimpan Firebase di local storage browser),
+    // load data cloud sesuai UID tsb, baru render aplikasi
     function initApp() {
         renderLoadingScreen();
         auth.onAuthStateChanged(async (user) => {
             if (!user) {
-                currentUid = null;
-                currentUserProfile = { name: '', email: '' };
-                isDataLoaded = false;
-                state.auth.loading = false;
-                render(); // currentUid kosong -> render() akan menampilkan layar login
+                auth.signInAnonymously().catch(err => {
+                    console.error('Gagal login anonim ke Firebase:', err);
+                });
                 return;
             }
             currentUid = user.uid;
-            currentUserProfile = {
-                name: user.displayName || (user.email ? user.email.split('@')[0] : 'Pengguna'),
-                email: user.email || ''
-            };
             await loadCloudData();
             isDataLoaded = true;
-            state.auth.loading = false;
-            state.auth.error = null;
             render();
         });
-    }
-
-    function translateAuthError(err) {
-        const map = {
-            'auth/invalid-email': 'Format email tidak valid.',
-            'auth/user-not-found': 'Akun tidak ditemukan. Silakan daftar dulu.',
-            'auth/user-disabled': 'Akun ini dinonaktifkan.',
-            'auth/wrong-password': 'Password salah.',
-            'auth/invalid-credential': 'Email atau password salah.',
-            'auth/email-already-in-use': 'Email sudah terdaftar. Silakan login.',
-            'auth/weak-password': 'Password minimal 6 karakter.',
-            'auth/missing-password': 'Password wajib diisi.',
-            'auth/popup-closed-by-user': 'Login dibatalkan.',
-            'auth/network-request-failed': 'Koneksi bermasalah. Coba lagi.',
-            'auth/too-many-requests': 'Terlalu banyak percobaan. Coba lagi nanti.'
-        };
-        return (err && map[err.code]) || 'Terjadi kesalahan. Silakan coba lagi.';
-    }
-
-    function switchAuthMode(mode) {
-        state.auth.mode = mode;
-        state.auth.error = null;
-        render();
-    }
-
-    async function handleGoogleSignIn() {
-        state.auth.error = null;
-        state.auth.loading = true;
-        render();
-        try {
-            const provider = new firebase.auth.GoogleAuthProvider();
-            await auth.signInWithPopup(provider);
-            // sisanya ditangani oleh onAuthStateChanged
-        } catch (err) {
-            console.error(err);
-            state.auth.loading = false;
-            state.auth.error = translateAuthError(err);
-            render();
-        }
-    }
-
-    async function handleEmailAuthSubmit(event) {
-        event.preventDefault();
-        const email = document.getElementById('auth-email').value.trim();
-        const password = document.getElementById('auth-password').value;
-
-        state.auth.error = null;
-        state.auth.loading = true;
-        render();
-
-        try {
-            if (state.auth.mode === 'login') {
-                await auth.signInWithEmailAndPassword(email, password);
-            } else {
-                await auth.createUserWithEmailAndPassword(email, password);
-            }
-            // sisanya ditangani oleh onAuthStateChanged
-        } catch (err) {
-            console.error(err);
-            state.auth.loading = false;
-            state.auth.error = translateAuthError(err);
-            render();
-        }
-    }
-
-    async function handleSignOut() {
-        try {
-            await auth.signOut();
-        } catch (err) {
-            console.error('Gagal logout:', err);
-            return;
-        }
-        // Bersihkan data lokal supaya tidak "bocor" ke sesi akun berikutnya di device yang sama
-        state.wallets = [];
-        state.transactions = [];
-        state.goals = [];
-        state.debts = [];
-        state.budget.incomeEstimate = 0;
-        state.budget.subcategories = [];
-        state.activeMenu = 'dashboard';
-    }
-
-    function renderAuthScreenMarkup() {
-        const a = state.auth;
-        const isLogin = a.mode === 'login';
-        return `
-            <div class="w-full min-h-screen flex items-center justify-center bg-brand-bgLight px-4">
-                <div class="w-full max-w-sm bg-white rounded-2xl shadow-2xl border border-slate-100 p-7">
-                    <div class="flex items-center gap-3 mb-6 justify-center">
-                        <div class="w-10 h-10 rounded-xl bg-brand-lime flex items-center justify-center font-black text-2xl shadow-sm text-brand-textDark font-heading">
-                            B
-                        </div>
-                        <span class="font-heading font-extrabold text-2xl tracking-tight">Budggt.</span>
-                    </div>
-
-                    <h1 class="font-heading font-extrabold text-lg text-center text-slate-900 mb-1">
-                        ${isLogin ? 'Masuk ke akun kamu' : 'Buat akun baru'}
-                    </h1>
-                    <p class="text-brand-textMuted text-xs text-center mb-5 font-sans">
-                        ${isLogin ? 'Data kamu tersinkron otomatis di semua perangkat.' : 'Daftar dulu, lalu data bisa diakses dari HP maupun laptop.'}
-                    </p>
-
-                    ${a.error ? `
-                        <div class="bg-red-50 border border-red-100 text-red-600 text-xs font-semibold rounded-xl px-3 py-2 mb-4 font-sans">
-                            ${a.error}
-                        </div>
-                    ` : ''}
-
-                    <button
-                        type="button"
-                        onclick="handleGoogleSignIn()"
-                        ${a.loading ? 'disabled' : ''}
-                        class="w-full flex items-center justify-center gap-2 border border-slate-200 hover:bg-slate-50 font-bold py-2.5 rounded-xl text-xs text-slate-700 transition-all mb-4 disabled:opacity-50 font-sans"
-                    >
-                        <i class="fa-brands fa-google text-sm"></i>
-                        Lanjutkan dengan Google
-                    </button>
-
-                    <div class="flex items-center gap-3 mb-4">
-                        <div class="flex-1 h-px bg-slate-100"></div>
-                        <span class="text-[10px] text-brand-textMuted font-bold uppercase font-sans">atau pakai email</span>
-                        <div class="flex-1 h-px bg-slate-100"></div>
-                    </div>
-
-                    <form onsubmit="handleEmailAuthSubmit(event)" class="space-y-3 text-left">
-                        <div>
-                            <label class="text-[10px] font-bold tracking-wider text-brand-textMuted block mb-1">EMAIL</label>
-                            <input
-                                type="email" id="auth-email" required placeholder="nama@email.com"
-                                class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-lime font-sans"
-                            />
-                        </div>
-                        <div>
-                            <label class="text-[10px] font-bold tracking-wider text-brand-textMuted block mb-1">PASSWORD</label>
-                            <input
-                                type="password" id="auth-password" required minlength="6" placeholder="Minimal 6 karakter"
-                                class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-lime font-sans"
-                            />
-                        </div>
-                        <button
-                            type="submit"
-                            ${a.loading ? 'disabled' : ''}
-                            class="w-full bg-brand-lime hover:bg-brand-limeDark text-brand-textDark font-bold py-2.5 rounded-xl shadow-md text-xs transition-all disabled:opacity-50 font-sans"
-                        >
-                            ${a.loading ? 'Memproses...' : (isLogin ? 'Masuk' : 'Daftar')}
-                        </button>
-                    </form>
-
-                    <p class="text-center text-xs text-brand-textMuted mt-5 font-sans">
-                        ${isLogin ? 'Belum punya akun?' : 'Sudah punya akun?'}
-                        <button onclick="switchAuthMode('${isLogin ? 'register' : 'login'}')" class="font-bold text-brand-textDark hover:underline">
-                            ${isLogin ? 'Daftar di sini' : 'Masuk di sini'}
-                        </button>
-                    </p>
-                </div>
-            </div>
-        `;
     }
 
     // --- STREAMING_CHUNK: Formatting & UI Helpers... ---
@@ -1412,7 +1243,7 @@
                 <div class="flex justify-between items-center text-left">
                     <div>
                         <h1 class="font-heading font-extrabold text-3xl tracking-tight text-brand-textDark">Dashboard</h1>
-                        <p class="text-brand-textMuted text-xs mt-0.5 font-semibold">Halo, ${currentUserProfile.name || 'Pengguna'} 🍌</p>
+                        <p class="text-brand-textMuted text-xs mt-0.5 font-semibold">Halo, Trisna 🍌</p>
                     </div>
                     <!-- ACTIVE PERIOD -->
                     <div class="bg-white border border-brand-border px-3.5 py-1.5 rounded-xl shadow-sm flex items-center gap-2">
@@ -1582,12 +1413,6 @@
         const app = document.getElementById('app');
         if (!app) return;
 
-        // Belum login -> tampilkan layar login/daftar saja
-        if (!currentUid) {
-            app.innerHTML = renderAuthScreenMarkup();
-            return;
-        }
-
         // Auto-sync ke Firebase setiap kali state berubah & di-render ulang
         scheduleCloudSave();
 
@@ -1633,15 +1458,13 @@
                 </div>
                 <div class="border-t border-brand-border pt-4">
                     <div class="flex items-center justify-between text-brand-textMuted text-xs">
-                        <div class="flex items-center gap-2 min-w-0">
-                            <div class="w-8 h-8 rounded-full bg-brand-lime flex items-center justify-center font-bold text-brand-textDark text-xs shrink-0">
-                                ${(currentUserProfile.name || 'U').charAt(0).toUpperCase()}
+                        <div class="flex items-center gap-2">
+                            <div class="w-8 h-8 rounded-full bg-brand-lime flex items-center justify-center font-bold text-brand-textDark text-xs">
+                                T
                             </div>
-                            <span class="font-semibold text-brand-textDark truncate" title="${currentUserProfile.email || ''}">${currentUserProfile.name || 'Pengguna'}</span>
+                            <span class="font-semibold text-brand-textDark">Trisna</span>
                         </div>
-                        <button onclick="handleSignOut()" title="Keluar" class="text-slate-400 hover:text-red-500 transition-colors shrink-0 ml-2">
-                            <i class="fa-solid fa-arrow-right-from-bracket"></i>
-                        </button>
+                        <span class="bg-brand-bgLight px-2 py-1 rounded text-[10px] font-bold">PRO</span>
                     </div>
                 </div>
             </aside>
