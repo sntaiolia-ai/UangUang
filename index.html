@@ -554,15 +554,18 @@ window.executeConfirm = function() {
             showToast('Transaksi baru berhasil ditambahkan!');
         }
 
-// --- KODE INTEGRASI FIREBASE ---
-    if (typeof window.syncTransactionToFirebase === 'function') {
-        window.syncTransactionToFirebase(data.id, data);
-    }
-    // -------------------------------
+// --- KODE INTEGRASI FIREBASE YANG AMAN ---
+    // Kode ini otomatis mendeteksi apakah variabel objeknya bernama 'tx' atau 'data'
+    const firebaseTxData = (typeof tx !== 'undefined') ? tx : (typeof data !== 'undefined' ? data : null);
     
-          state.txModal.show = false;
-        render();
-    };
+    if (firebaseTxData && typeof window.syncTransactionToFirebase === 'function') {
+        window.syncTransactionToFirebase(firebaseTxData.id, firebaseTxData);
+    }
+    // ------------------------------------------
+    
+    state.modal.show = false;
+    render();
+};
 
     window.toggleTxExpand = function(id) {
         state.selectedTransactionId = (state.selectedTransactionId === id) ? null : id;
@@ -3364,14 +3367,17 @@ async function loadTransactionsFromFirebase() {
             firebaseTxs.push(doc.data());
         });
 
-        if (firebaseTxs.length > 0) {
-            // Masukkan ke state lokal Anda
-            state.transactions = firebaseTxs;
-            if (typeof render === 'function') {
-                render();
-            }
-            console.log("Firebase: Berhasil memuat " + firebaseTxs.length + " transaksi dari database!");
+        // Urutkan transaksi berdasarkan tanggal agar kalkulasi aplikasi Anda runtut dan benar
+        firebaseTxs.sort((a, b) => new Date(a.date) - new Date(b.date));
+
+        // Masukkan data transaksi ke state lokal
+        state.transactions = firebaseTxs;
+        
+        // Picu render agar tampilan diperbarui dengan data transaksi yang benar
+        if (typeof render === 'function') {
+            render();
         }
+        console.log("Firebase: Berhasil memuat " + firebaseTxs.length + " transaksi dari database!");
     } catch (e) {
         console.error("Firebase Error: Gagal memuat transaksi:", e);
     }
