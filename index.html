@@ -124,7 +124,10 @@
         toastMessage: null,
 
         // State layar login (tidak disimpan ke Firestore)
-        auth: { mode: 'login', error: null, loading: false }
+        auth: { mode: 'login', error: null, loading: false },
+
+        // State modal "Data Bersama" / undang pasangan (tidak disimpan ke Firestore)
+        shareModal: { show: false, error: null, loading: false }
     };
 
     // --- STREAMING_CHUNK: Firebase Setup & Cloud Sync... ---
@@ -143,13 +146,28 @@
 
     // Field-field state yang persisten di cloud (state UI seperti modal/filter tidak disimpan)
     const PERSISTED_KEYS = ['wallets', 'transactions', 'goals', 'debts', 'budget'];
+    const SPACE_CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // tanpa karakter yg gampang ketuker (0/O, 1/I)
 
     let currentUid = null;
     let currentUserProfile = { name: '', email: '' };
+    let currentSpaceId = null; // "ruang data" aktif yang sedang dipakai (bisa dipakai bareng pasangan)
     let isDataLoaded = false; // Cegah auto-save menimpa data cloud sebelum data awal selesai dimuat
     let saveDebounceTimer = null;
 
-    function getUserDocRef() {
+    function generateSpaceCode() {
+        let code = '';
+        for (let i = 0; i < 6; i++) {
+            code += SPACE_CODE_CHARS.charAt(Math.floor(Math.random() * SPACE_CODE_CHARS.length));
+        }
+        return code;
+    }
+
+    function getSpaceDocRef(spaceId) {
+        if (!spaceId) return null;
+        return db.collection('budggt_spaces').doc(spaceId);
+    }
+
+    function getUserProfileRef() {
         if (!currentUid) return null;
         return db.collection('budggt_users').doc(currentUid);
     }
@@ -157,7 +175,7 @@
     // Simpan state ke Firestore, di-debounce supaya tidak nembak write tiap keystroke/slider
     function scheduleCloudSave() {
         if (!isDataLoaded) return; // jangan menimpa data cloud sebelum load awal beres
-        const ref = getUserDocRef();
+        const ref = getSpaceDocRef(currentSpaceId);
         if (!ref) return;
 
         clearTimeout(saveDebounceTimer);
@@ -172,9 +190,9 @@
         }, 700);
     }
 
-    // Ambil data awal dari Firestore lalu suntikkan ke state lokal
-    async function loadCloudData() {
-        const ref = getUserDocRef();
+    // Ambil data ruang bersama dari Firestore lalu suntikkan ke state lokal
+    async function loadSpaceData(spaceId) {
+        const ref = getSpaceDocRef(spaceId);
         if (!ref) return;
 
         try {
@@ -190,6 +208,113 @@
         } catch (err) {
             console.error('Gagal memuat data dari Firebase:', err);
         }
+    }
+
+    // Pastikan user punya profil + ruang data aktif. Kalau baru pertama kali login,
+    // otomatis dibuatkan ruang data pribadi dengan kode unik.
+    async function ensureUserSpace(uid) {
+        const profileRef = getUserProfileRef();
+        const profileSnap = await profileRef.get();
+
+        if (profileSnap.exists && profileSnap.data().spaceId) {
+            return profileSnap.data().spaceId;
+        }
+
+        // Belum punya ruang data -> buat baru
+        let spaceId = generateSpaceCode();
+        // Jaga-jaga kalau kode bentrok (sangat jarang), coba ulang beberapa kali
+        for (let i = 0; i < 5; i++) {
+            const existing = await getSpaceDocRef(spaceId).get();
+            if (!existing.exists) break;
+            spaceId = generateSpaceCode();
+        }
+
+        await getSpaceDocRef(spaceId).set({
+            wallets: [], transactions: [], goals: [], debts: [],
+            budget: { incomeEstimate: 0, selectedMonth: new Date().toISOString().slice(0, 7), kebutuhanPct: 50, keinginanPct: 30, tabunganPct: 20, subcategories: [] },
+            members: [uid],
+            createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+
+        await profileRef.set({ spaceId, updatedAt: firebase.firestore.FieldValue.serverTimestamp() }, { merge: true });
+        return spaceId;
+    }
+
+    // Gabung ke ruang data milik orang lain (misal pasangan) pakai kode
+    async function joinSharedSpace(codeInput) {
+        const code = (codeInput || '').trim().toUpperCase();
+        if (!code) {
+            state.shareModal.error = 'Masukkan kode dulu ya.';
+            render();
+            return;
+        }
+
+        state.shareModal.loading = true;
+        state.shareModal.error = null;
+        render();
+
+        try {
+            const spaceRef = getSpaceDocRef(code);
+            const spaceSnap = await spaceRef.get();
+
+            if (!spaceSnap.exists) {
+                state.shareModal.loading = false;
+                state.shareModal.error = 'Kode tidak ditemukan. Cek lagi kodenya.';
+                render();
+                return;
+            }
+
+            // Daftarkan diri sebagai anggota ruang tsb
+            await spaceRef.set({
+                members: firebase.firestore.FieldValue.arrayUnion(currentUid)
+            }, { merge: true });
+
+            // Arahkan profil user ke ruang data ini
+            await getUserProfileRef().set({ spaceId: code, updatedAt: firebase.firestore.FieldValue.serverTimestamp() }, { merge: true });
+
+            currentSpaceId = code;
+            isDataLoaded = false;
+            await loadSpaceData(code);
+            isDataLoaded = true;
+
+            state.shareModal.loading = false;
+            state.shareModal.show = false;
+            state.shareModal.error = null;
+            showToast('Berhasil gabung ke data bersama! 🎉');
+        } catch (err) {
+            console.error('Gagal gabung ke ruang bersama:', err);
+            state.shareModal.loading = false;
+            state.shareModal.error = 'Gagal gabung. Coba lagi.';
+            render();
+        }
+    }
+
+    function openShareModal() {
+        state.shareModal.show = true;
+        state.shareModal.error = null;
+        render();
+    }
+
+    function closeShareModal() {
+        state.shareModal.show = false;
+        state.shareModal.error = null;
+        render();
+    }
+
+    function handleJoinSpaceSubmit(event) {
+        event.preventDefault();
+        const val = document.getElementById('join-space-code').value;
+        joinSharedSpace(val);
+    }
+
+    function copyShareCode() {
+        if (!currentSpaceId) return;
+        navigator.clipboard.writeText(currentSpaceId).then(() => {
+            showToast('Kode disalin! Kirim ke pasanganmu 💌');
+        }).catch(() => {
+            showToast('Gagal menyalin kode, coba salin manual.');
+        });
     }
 
     function renderLoadingScreen() {
@@ -213,6 +338,7 @@
             if (!user) {
                 currentUid = null;
                 currentUserProfile = { name: '', email: '' };
+                currentSpaceId = null;
                 isDataLoaded = false;
                 state.auth.loading = false;
                 render(); // currentUid kosong -> render() akan menampilkan layar login
@@ -223,7 +349,8 @@
                 name: user.displayName || (user.email ? user.email.split('@')[0] : 'Pengguna'),
                 email: user.email || ''
             };
-            await loadCloudData();
+            currentSpaceId = await ensureUserSpace(currentUid);
+            await loadSpaceData(currentSpaceId);
             isDataLoaded = true;
             state.auth.loading = false;
             state.auth.error = null;
@@ -309,6 +436,8 @@
         state.budget.incomeEstimate = 0;
         state.budget.subcategories = [];
         state.activeMenu = 'dashboard';
+        state.shareModal = { show: false, error: null, loading: false };
+        currentSpaceId = null;
     }
 
     function renderAuthScreenMarkup() {
@@ -1646,7 +1775,14 @@
                         `).join('')}
                     </nav>
                 </div>
-                <div class="border-t border-brand-border pt-4">
+                <div class="border-t border-brand-border pt-4 space-y-3">
+                    <button
+                        onclick="openShareModal()"
+                        class="w-full flex items-center justify-center gap-2 border border-dashed border-brand-lime/70 bg-brand-lime/10 hover:bg-brand-lime/20 text-brand-textDark font-bold py-2 rounded-xl text-[11px] transition-all"
+                    >
+                        <i class="fa-solid fa-user-group text-[11px]"></i>
+                        Data Bersama
+                    </button>
                     <div class="flex items-center justify-between text-brand-textMuted text-xs">
                         <div class="flex items-center gap-2 min-w-0">
                             <div class="w-8 h-8 rounded-full bg-brand-lime flex items-center justify-center font-bold text-brand-textDark text-xs shrink-0">
@@ -1695,6 +1831,7 @@
             ${state.goalDetailId ? renderGoalDetailModal() : ''}
             ${state.debtModal.show ? renderDebtModalMarkup() : ''}
             ${state.confirmDialog.show ? renderConfirmDialog() : ''}
+            ${state.shareModal.show ? renderShareModalMarkup() : ''}
         `;
     }
 
@@ -3456,6 +3593,78 @@
                 <p class="text-brand-textMuted text-xs max-w-sm font-sans">
                     Modul untuk menu <span class="font-bold text-brand-textDark capitalize font-sans">"${state.activeMenu}"</span> sedang dipersiapkan. Gunakan menu navigasi utama untuk mengelola aliran finansial Anda.
                 </p>
+            </div>
+        `;
+    }
+
+    function renderShareModalMarkup() {
+        const sm = state.shareModal;
+        return `
+            <div class="fixed inset-0 bg-slate-900/60 flex items-center justify-center z-[100] animate-fade-in px-4">
+                <div class="bg-white rounded-2xl w-full max-w-sm p-6 shadow-2xl border border-slate-100 space-y-5">
+                    <div class="flex items-start justify-between">
+                        <div class="flex items-center gap-2">
+                            <div class="w-9 h-9 rounded-full bg-brand-limeLight flex items-center justify-center text-brand-textDark">
+                                <i class="fa-solid fa-user-group text-sm"></i>
+                            </div>
+                            <h4 class="font-heading font-extrabold text-slate-900 text-base">Data Bersama</h4>
+                        </div>
+                        <button onclick="closeShareModal()" class="text-slate-400 hover:text-slate-600">
+                            <i class="fa-solid fa-xmark"></i>
+                        </button>
+                    </div>
+
+                    ${sm.error ? `
+                        <div class="bg-red-50 border border-red-100 text-red-600 text-xs font-semibold rounded-xl px-3 py-2 font-sans">
+                            ${sm.error}
+                        </div>
+                    ` : ''}
+
+                    <div>
+                        <p class="text-[10px] font-bold tracking-wider text-brand-textMuted mb-2 font-sans">KODE RUANG DATA KAMU</p>
+                        <div class="flex items-center gap-2">
+                            <div class="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-center font-heading font-extrabold text-lg tracking-[0.3em] text-slate-800">
+                                ${currentSpaceId || '------'}
+                            </div>
+                            <button
+                                onclick="copyShareCode()"
+                                title="Salin kode"
+                                class="w-11 h-11 shrink-0 rounded-xl bg-brand-lime hover:bg-brand-limeDark text-brand-textDark flex items-center justify-center transition-all"
+                            >
+                                <i class="fa-solid fa-copy"></i>
+                            </button>
+                        </div>
+                        <p class="text-[11px] text-brand-textMuted mt-2 font-sans leading-relaxed">
+                            Bagikan kode ini ke pasanganmu. Setelah dia masukkan kode ini di akunnya, kalian akan melihat data keuangan yang sama.
+                        </p>
+                    </div>
+
+                    <div class="flex items-center gap-3">
+                        <div class="flex-1 h-px bg-slate-100"></div>
+                        <span class="text-[10px] text-brand-textMuted font-bold uppercase font-sans">atau gabung ke kode lain</span>
+                        <div class="flex-1 h-px bg-slate-100"></div>
+                    </div>
+
+                    <form onsubmit="handleJoinSpaceSubmit(event)" class="space-y-2">
+                        <input
+                            type="text" id="join-space-code" placeholder="Masukkan kode dari pasangan"
+                            maxlength="6"
+                            class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm text-center tracking-[0.2em] font-bold uppercase focus:outline-none focus:ring-2 focus:ring-brand-lime font-sans"
+                        />
+                        <button
+                            type="submit"
+                            ${sm.loading ? 'disabled' : ''}
+                            class="w-full bg-slate-900 hover:bg-slate-800 text-white font-bold py-2.5 rounded-xl text-xs transition-all disabled:opacity-50 font-sans"
+                        >
+                            ${sm.loading ? 'Memproses...' : 'Gabung dengan Kode Ini'}
+                        </button>
+                    </form>
+
+                    <p class="text-[10px] text-amber-600 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2 font-sans leading-relaxed">
+                        <i class="fa-solid fa-triangle-exclamation mr-1"></i>
+                        Gabung ke kode lain akan mengganti tampilan datamu dengan data ruang tersebut. Data lamamu tidak hilang, hanya tidak ditampilkan selama kamu memakai kode lain.
+                    </p>
+                </div>
             </div>
         `;
     }
