@@ -131,7 +131,10 @@
         auth: { mode: 'login', error: null, loading: false },
 
         // State modal "Data Bersama" / undang pasangan (tidak disimpan ke Firestore)
-        shareModal: { show: false, error: null, loading: false }
+        shareModal: { show: false, error: null, loading: false },
+
+        // State drawer navigasi mobile (tidak disimpan ke Firestore)
+        mobileNavOpen: false
     };
 
     // --- STREAMING_CHUNK: Firebase Setup & Cloud Sync... ---
@@ -560,6 +563,17 @@
 
     window.switchMenu = function(menuId) {
         state.activeMenu = menuId;
+        state.mobileNavOpen = false; // tutup drawer mobile setiap kali pindah menu
+        render();
+    };
+
+    window.toggleMobileNav = function() {
+        state.mobileNavOpen = !state.mobileNavOpen;
+        render();
+    };
+
+    window.closeMobileNav = function() {
+        state.mobileNavOpen = false;
         render();
     };
 
@@ -1720,13 +1734,13 @@
         return `
             <div class="space-y-6">
                 <!-- Top Header Info -->
-                <div class="flex justify-between items-center text-left">
+                <div class="flex flex-col sm:flex-row sm:justify-between sm:items-center text-left gap-3">
                     <div>
-                        <h1 class="font-heading font-extrabold text-3xl tracking-tight text-brand-textDark">Dashboard</h1>
+                        <h1 class="font-heading font-extrabold text-2xl sm:text-3xl tracking-tight text-brand-textDark">Dashboard</h1>
                         <p class="text-brand-textMuted text-xs mt-0.5 font-semibold">Halo, ${currentUserProfile.name || 'Pengguna'} 🍌</p>
                     </div>
                     <!-- ACTIVE PERIOD + DOWNLOAD REPORT -->
-                    <div class="flex items-center gap-2">
+                    <div class="flex flex-wrap items-center gap-2">
                         <div class="bg-white border border-brand-border px-3.5 py-1.5 rounded-xl shadow-sm flex items-center gap-2">
                             <i class="fa-solid fa-calendar-check text-[#bcfd1c] text-xs"></i>
                             <span class="text-[10px] font-extrabold text-slate-500 tracking-wider uppercase">ACTIVE PERIOD: <strong class="text-slate-800">${getMonthRangeLabel(selectedMonth)}</strong></span>
@@ -1743,22 +1757,22 @@
                 </div>
 
                 <!-- BLACK PREMIUM PANEL: SEKILAS HARI INI (mockup referensi Screenshot 2026-07-14 112249.jpg) -->
-                <div class="bg-zinc-950 text-white rounded-3xl p-6 shadow-xl relative overflow-hidden text-left border border-zinc-800">
-                    <div class="flex justify-between items-start mb-4">
+                <div class="bg-zinc-950 text-white rounded-3xl p-5 sm:p-6 shadow-xl relative overflow-hidden text-left border border-zinc-800">
+                    <div class="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-4 sm:gap-0 mb-4">
                         <div class="space-y-1">
                             <span class="text-[9px] font-extrabold tracking-widest text-[#bcfd1c] uppercase flex items-center gap-1">
                                 <i class="fa-solid fa-bolt"></i> SEKILAS HARI INI
                             </span>
                             <div class="flex items-center gap-2">
-                                <h2 class="text-3xl font-black tracking-tight font-sans text-brand-lime">${formatRp(sisaBudgetHarian)}</h2>
-                                <i class="fa-solid fa-lock text-slate-500 text-xs"></i>
+                                <h2 class="text-2xl sm:text-3xl font-black tracking-tight font-sans text-brand-lime break-all">${formatRp(sisaBudgetHarian)}</h2>
+                                <i class="fa-solid fa-lock text-slate-500 text-xs shrink-0"></i>
                             </div>
                             <span class="text-[10px] text-slate-400 font-semibold flex items-center gap-1">
                                 <i class="fa-solid fa-wallet text-[#bcfd1c] text-[10px]"></i> budget harian yang tersisa
                             </span>
                         </div>
 
-                        <div class="flex gap-8 text-right pr-4 mt-1 font-sans">
+                        <div class="flex gap-6 sm:gap-8 text-left sm:text-right sm:pr-4 mt-1 font-sans">
                             <div class="space-y-0.5">
                                 <span class="text-[9px] font-extrabold text-slate-400 uppercase tracking-widest block">Pemasukan</span>
                                 <span class="text-xs font-black text-emerald-400">${formatRp(pemasukanHariIni)}</span>
@@ -1779,8 +1793,8 @@
                 </div>
 
                 <!-- MIDDLE CARD: PROGRES PENGELUARAN (Sesuai image_6eab3c.png tanpa pesan status) -->
-                <div class="bg-white border border-brand-border rounded-3xl p-5 shadow-sm grid grid-cols-4 gap-6 items-center">
-                    <div class="col-span-1 border-r border-slate-100 flex items-center gap-4 py-2 text-left">
+                <div class="bg-white border border-brand-border rounded-3xl p-5 shadow-sm grid grid-cols-1 sm:grid-cols-4 gap-4 sm:gap-6 items-center">
+                    <div class="sm:col-span-1 border-b sm:border-b-0 sm:border-r border-slate-100 flex items-center gap-4 py-2 pb-4 sm:pb-2 text-left">
                         <div class="w-14 h-14 rounded-full border-4 border-slate-100 flex flex-col items-center justify-center bg-slate-50/50">
                             <span class="text-[8px] font-black text-slate-400 uppercase tracking-wide">HARI</span>
                             <span class="text-lg font-black text-slate-800 font-sans leading-none">${currentDay}</span>
@@ -1791,7 +1805,7 @@
                         </div>
                     </div>
 
-                    <div class="col-span-3 space-y-3.5 text-left pl-2">
+                    <div class="sm:col-span-3 space-y-3.5 text-left pl-0 sm:pl-2">
                         <!-- KEBUTUHAN -->
                         <div class="space-y-1">
                             <div class="flex justify-between items-center text-[11px] font-semibold">
@@ -1828,7 +1842,7 @@
                 </div>
 
                 <!-- BOTTOM ROW: CALENDAR AND RECENT TRANSACTIONS -->
-                <div class="grid grid-cols-2 gap-6 items-start">
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
                     
                     <!-- CALENDAR CARD -->
                     <div class="bg-white border border-brand-border rounded-3xl p-5 shadow-sm space-y-4">
@@ -1920,14 +1934,22 @@
         const netWorth = totalAssets - totalLiabilities;
 
         app.innerHTML = `
-            <!-- Sidebar Navigation -->
-            <aside class="w-64 bg-white border-r border-brand-border p-6 flex flex-col justify-between shrink-0 z-10 overflow-y-auto">
+            <!-- Backdrop drawer mobile -->
+            ${state.mobileNavOpen ? `<div onclick="closeMobileNav()" class="fixed inset-0 bg-slate-900/50 z-30 md:hidden"></div>` : ''}
+
+            <!-- Sidebar Navigation: drawer overlay di mobile, statis di desktop -->
+            <aside class="fixed md:static inset-y-0 left-0 z-40 w-72 md:w-64 bg-white border-r border-brand-border p-6 flex flex-col justify-between shrink-0 overflow-y-auto transform transition-transform duration-300 ease-in-out ${state.mobileNavOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0">
                 <div>
-                    <div class="flex items-center gap-3 mb-8">
-                        <div class="w-10 h-10 rounded-xl bg-brand-lime flex items-center justify-center font-black text-2xl shadow-sm text-brand-textDark font-heading">
-                            B
+                    <div class="flex items-center justify-between mb-8">
+                        <div class="flex items-center gap-3">
+                            <div class="w-10 h-10 rounded-xl bg-brand-lime flex items-center justify-center font-black text-2xl shadow-sm text-brand-textDark font-heading">
+                                B
+                            </div>
+                            <span class="font-heading font-extrabold text-2xl tracking-tight">Budggt.</span>
                         </div>
-                        <span class="font-heading font-extrabold text-2xl tracking-tight">Budggt.</span>
+                        <button onclick="closeMobileNav()" class="md:hidden text-slate-400 hover:text-slate-600 p-1">
+                            <i class="fa-solid fa-xmark text-lg"></i>
+                        </button>
                     </div>
                     <nav class="space-y-1">
                         ${[
@@ -1974,30 +1996,44 @@
                 </div>
             </aside>
 
-            <!-- Main Panel Space -->
-            <main class="flex-1 p-8 overflow-y-auto flex flex-col justify-between bg-[#fafbfa] relative">
-                
-                <!-- Toast Notification -->
-                ${state.toastMessage ? `
-                    <div class="absolute top-5 right-5 bg-slate-900 text-white text-xs px-4 py-2.5 rounded-xl shadow-lg flex items-center gap-2 z-50 transition-all duration-300">
-                        <i class="fa-solid fa-circle-check text-[#bcfd1c]"></i>
-                        <span>${state.toastMessage}</span>
+            <!-- Kolom kanan: top bar mobile + konten utama -->
+            <div class="flex-1 flex flex-col overflow-hidden min-w-0">
+                <!-- Top bar khusus mobile -->
+                <div class="md:hidden flex items-center justify-between px-4 py-3.5 bg-white border-b border-brand-border shrink-0 z-20">
+                    <button onclick="toggleMobileNav()" class="text-slate-700 text-lg p-1 -ml-1">
+                        <i class="fa-solid fa-bars"></i>
+                    </button>
+                    <span class="font-heading font-extrabold text-lg tracking-tight">Budggt.</span>
+                    <div class="w-7 h-7 rounded-full bg-brand-lime flex items-center justify-center font-bold text-brand-textDark text-[10px]">
+                        ${(currentUserProfile.name || 'U').charAt(0).toUpperCase()}
                     </div>
-                ` : ''}
-
-                ${state.activeMenu === 'dashboard' ? renderDashboardView() : ''}
-                ${state.activeMenu === 'dompet' ? renderDompetView(assets, liabilities, totalAssets, totalLiabilities, netWorth) : ''}
-                ${state.activeMenu === 'trans' ? renderTransaksiView() : ''}
-                ${state.activeMenu === 'budget' ? renderBudgetView() : ''}
-                ${state.activeMenu === 'goals' ? renderGoalsView() : ''}
-                ${state.activeMenu === 'utang' ? renderUtangView() : ''}
-                ${state.activeMenu !== 'dashboard' && state.activeMenu !== 'dompet' && state.activeMenu !== 'trans' && state.activeMenu !== 'budget' && state.activeMenu !== 'goals' && state.activeMenu !== 'utang' ? renderPlaceholderView() : ''}
-
-                <!-- Footer -->
-                <div class="border-t border-slate-100/80 pt-3 text-center text-[10px] text-brand-textMuted mt-12">
-                    Budggt App Prototype © 2026. Made with ❤️ for mindful saving.
                 </div>
-            </main>
+
+                <!-- Main Panel Space -->
+                <main class="flex-1 p-4 md:p-8 overflow-y-auto flex flex-col justify-between bg-[#fafbfa] relative">
+                    
+                    <!-- Toast Notification -->
+                    ${state.toastMessage ? `
+                        <div class="fixed md:absolute top-4 md:top-5 left-4 right-4 md:left-auto md:right-5 bg-slate-900 text-white text-xs px-4 py-2.5 rounded-xl shadow-lg flex items-center gap-2 z-50 transition-all duration-300">
+                            <i class="fa-solid fa-circle-check text-[#bcfd1c]"></i>
+                            <span>${state.toastMessage}</span>
+                        </div>
+                    ` : ''}
+
+                    ${state.activeMenu === 'dashboard' ? renderDashboardView() : ''}
+                    ${state.activeMenu === 'dompet' ? renderDompetView(assets, liabilities, totalAssets, totalLiabilities, netWorth) : ''}
+                    ${state.activeMenu === 'trans' ? renderTransaksiView() : ''}
+                    ${state.activeMenu === 'budget' ? renderBudgetView() : ''}
+                    ${state.activeMenu === 'goals' ? renderGoalsView() : ''}
+                    ${state.activeMenu === 'utang' ? renderUtangView() : ''}
+                    ${state.activeMenu !== 'dashboard' && state.activeMenu !== 'dompet' && state.activeMenu !== 'trans' && state.activeMenu !== 'budget' && state.activeMenu !== 'goals' && state.activeMenu !== 'utang' ? renderPlaceholderView() : ''}
+
+                    <!-- Footer -->
+                    <div class="border-t border-slate-100/80 pt-3 text-center text-[10px] text-brand-textMuted mt-12">
+                        Budggt App Prototype © 2026. Made with ❤️ for mindful saving.
+                    </div>
+                </main>
+            </div>
 
             <!-- Render Modals & Dialogs -->
             ${state.modal.show ? renderModalMarkup() : ''}
@@ -2016,9 +2052,9 @@
     function renderDompetView(assets, liabilities, totalAssets, totalLiabilities, netWorth) {
         return `
             <div class="space-y-6">
-                <div class="flex justify-between items-center">
+                <div class="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
                     <div class="text-left">
-                        <h1 class="font-heading font-extrabold text-3xl tracking-tight text-brand-textDark">Dompet</h1>
+                        <h1 class="font-heading font-extrabold text-2xl sm:text-3xl tracking-tight text-brand-textDark">Dompet</h1>
                         <p class="text-brand-textMuted text-xs mt-0.5">Kelola seluruh tabungan, aset tunai, dan kartu kredit terpusat.</p>
                     </div>
                     <button 
@@ -2030,18 +2066,18 @@
                     </button>
                 </div>
 
-                <div class="grid grid-cols-3 gap-4 bg-white border border-brand-border p-5 rounded-2xl shadow-sm">
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 bg-white border border-brand-border p-5 rounded-2xl shadow-sm">
                     <div class="space-y-1 text-left">
                         <span class="text-[10px] font-extrabold tracking-wider text-brand-textMuted block uppercase">Kekayaan Bersih</span>
                         <h2 class="text-2xl font-black text-slate-900">${formatRp(netWorth)}</h2>
                         <p class="text-[10px] text-brand-textMuted">Akumulasi Aset dikurangi Kewajiban</p>
                     </div>
-                    <div class="space-y-1 border-l border-brand-border pl-6 text-left">
+                    <div class="space-y-1 border-t sm:border-t-0 sm:border-l border-brand-border pt-3 sm:pt-0 sm:pl-6 text-left">
                         <span class="text-[10px] font-extrabold tracking-wider text-brand-textMuted block uppercase">Saldo & Tabungan</span>
                         <h2 class="text-2xl font-black text-emerald-600">${formatRp(totalAssets)}</h2>
                         <p class="text-[10px] text-emerald-600/80">Kategori Kas & Rekening Aktif</p>
                     </div>
-                    <div class="space-y-1 border-l border-brand-border pl-6 text-left">
+                    <div class="space-y-1 border-t sm:border-t-0 sm:border-l border-brand-border pt-3 sm:pt-0 sm:pl-6 text-left">
                         <span class="text-[10px] font-extrabold tracking-wider text-brand-textMuted block uppercase">Kewajiban & Kredit</span>
                         <h2 class="text-2xl font-black text-red-500">-${formatRp(totalLiabilities)}</h2>
                         <p class="text-[10px] text-red-400">Total Tagihan & Cicilan Aktif</p>
@@ -2073,7 +2109,7 @@
                                 ${formatRp(totalAssets)}
                             </span>
                         </div>
-                        <div class="grid grid-cols-3 gap-4">
+                        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                             ${assets.map(w => renderWalletCard(w, false)).join('')}
                         </div>
                     </div>
@@ -2088,7 +2124,7 @@
                                 -${formatRp(totalLiabilities)}
                             </span>
                         </div>
-                        <div class="grid grid-cols-3 gap-4">
+                        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                             ${liabilities.map(w => renderWalletCard(w, true)).join('')}
                         </div>
                     </div>
@@ -2260,22 +2296,22 @@
 
         return `
             <div class="space-y-6">
-                <div class="flex justify-between items-center">
+                <div class="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
                     <div class="text-left">
-                        <h1 class="font-heading font-extrabold text-3xl tracking-tight text-brand-textDark">Transaksi</h1>
+                        <h1 class="font-heading font-extrabold text-2xl sm:text-3xl tracking-tight text-brand-textDark">Transaksi</h1>
                         <p class="text-brand-textMuted text-xs mt-0.5">Pantau terus aliran dana keluar masuk secara terperinci.</p>
                     </div>
-                    <div class="flex items-center gap-3">
+                    <div class="flex items-center gap-3 w-full sm:w-auto">
                         <button 
                             onclick="openBulkModal()"
-                            class="bg-white border border-slate-200 text-slate-700 hover:border-slate-800 font-bold px-4 py-2.5 rounded-xl flex items-center gap-2 shadow-sm transition-all text-xs"
+                            class="flex-1 sm:flex-none justify-center bg-white border border-slate-200 text-slate-700 hover:border-slate-800 font-bold px-4 py-2.5 rounded-xl flex items-center gap-2 shadow-sm transition-all text-xs"
                         >
                             <i class="fa-solid fa-layer-group text-slate-500"></i>
                             Tambah Banyak
                         </button>
                         <button 
                             onclick="openTxModal()"
-                            class="bg-brand-lime hover:bg-brand-limeDark text-brand-textDark font-bold px-4 py-2.5 rounded-xl flex items-center gap-2 shadow-sm transition-all text-xs"
+                            class="flex-1 sm:flex-none justify-center bg-brand-lime hover:bg-brand-limeDark text-brand-textDark font-bold px-4 py-2.5 rounded-xl flex items-center gap-2 shadow-sm transition-all text-xs"
                         >
                             <i class="fa-solid fa-plus text-xs"></i>
                             Transaksi Baru
@@ -2575,7 +2611,7 @@
                         </button>
                     </div>
                 ` : `
-                    <div class="grid grid-cols-2 gap-4 pt-2">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
                         ${subcategories.map(sub => {
                             const spend = getAccumulatedSpend(sub.name, key);
                             const percent = sub.allocated > 0 ? Math.min(Math.round((spend / sub.allocated) * 100), 100) : 0;
@@ -2654,9 +2690,9 @@
     function renderGoalsView() {
         return `
             <div class="space-y-6">
-                <div class="flex justify-between items-center">
+                <div class="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
                     <div class="text-left">
-                        <h1 class="font-heading font-extrabold text-3xl tracking-tight text-brand-textDark">Goals</h1>
+                        <h1 class="font-heading font-extrabold text-2xl sm:text-3xl tracking-tight text-brand-textDark">Goals</h1>
                         <p class="text-brand-textMuted text-xs mt-0.5">Rencanakan mimpi keuangan jangka panjang Anda selangkah demi selangkah.</p>
                     </div>
                     <button 
@@ -2728,8 +2764,8 @@
         const linkedTxs = state.transactions.filter(t => t.linkedGoalId === goal.id);
 
         return `
-            <div class="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
-                <div class="bg-white rounded-2xl w-[460px] p-6 shadow-2xl border border-slate-100 max-h-[95vh] overflow-y-auto animate-fade-in relative">
+            <div class="fixed inset-0 bg-black/60 flex items-center justify-center z-50 px-4">
+                <div class="bg-white rounded-2xl w-full max-w-[460px] p-6 shadow-2xl border border-slate-100 max-h-[95vh] overflow-y-auto animate-fade-in relative">
                     <button onclick="closeGoalDetail()" class="absolute right-5 top-5 text-slate-400 hover:text-slate-900">
                         <i class="fa-solid fa-xmark text-lg"></i>
                     </button>
@@ -2831,22 +2867,22 @@
 
         return `
             <div class="space-y-6">
-                <div class="flex justify-between items-center">
+                <div class="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
                     <div class="text-left">
-                        <h1 class="font-heading font-extrabold text-3xl tracking-tight text-brand-textDark">Utang & Piutang</h1>
+                        <h1 class="font-heading font-extrabold text-2xl sm:text-3xl tracking-tight text-brand-textDark">Utang & Piutang</h1>
                         <p class="text-brand-textMuted text-xs mt-0.5">Pantau piutang Anda serta kewajiban pembayaran secara rapi dan transparan.</p>
                     </div>
-                    <div class="flex gap-2">
+                    <div class="flex gap-2 w-full sm:w-auto">
                         <button 
                             onclick="openDebtModal('utang', 'add')"
-                            class="bg-red-500 hover:bg-red-600 text-white font-bold px-4 py-2.5 rounded-xl flex items-center gap-2 shadow-sm transition-all text-xs focus:outline-none"
+                            class="flex-1 sm:flex-none justify-center bg-red-500 hover:bg-red-600 text-white font-bold px-4 py-2.5 rounded-xl flex items-center gap-2 shadow-sm transition-all text-xs focus:outline-none"
                         >
                             <i class="fa-solid fa-minus text-xs"></i>
                             Tambah Utang
                         </button>
                         <button 
                             onclick="openDebtModal('piutang', 'add')"
-                            class="bg-emerald-500 hover:bg-emerald-600 text-white font-bold px-4 py-2.5 rounded-xl flex items-center gap-2 shadow-sm transition-all text-xs focus:outline-none"
+                            class="flex-1 sm:flex-none justify-center bg-emerald-500 hover:bg-emerald-600 text-white font-bold px-4 py-2.5 rounded-xl flex items-center gap-2 shadow-sm transition-all text-xs focus:outline-none"
                         >
                             <i class="fa-solid fa-plus text-xs"></i>
                             Tambah Piutang
@@ -2854,7 +2890,7 @@
                     </div>
                 </div>
 
-                <div class="grid grid-cols-2 gap-4">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div class="bg-white border border-brand-border p-5 rounded-2xl shadow-sm text-left">
                         <span class="text-[10px] font-extrabold tracking-wider text-brand-textMuted block uppercase">Total Utang (Harus Dibayar)</span>
                         <h2 class="text-2xl font-black text-red-500 font-sans">${formatRp(totalDebt)}</h2>
@@ -2867,7 +2903,7 @@
                     </div>
                 </div>
 
-                <div class="grid grid-cols-2 gap-6 items-start">
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
                     <!-- COLUMN 1: UTANG -->
                     <div class="bg-white border border-brand-border rounded-2xl p-5 shadow-sm space-y-4">
                         <div class="flex justify-between items-center pb-2 border-b border-slate-100 text-left">
@@ -2960,8 +2996,8 @@
         const modeTitle = state.modal.mode === 'add' ? 'Tambah Dompet' : 'Ubah Detail Dompet';
         
         return `
-            <div class="fixed inset-0 bg-black/60 flex items-center justify-center z-50 animate-fade-in">
-                <div class="bg-white rounded-2xl w-[460px] p-6 shadow-2xl border border-slate-100 max-h-[95vh] overflow-y-auto">
+            <div class="fixed inset-0 bg-black/60 flex items-center justify-center z-50 animate-fade-in px-4">
+                <div class="bg-white rounded-2xl w-full max-w-[460px] p-6 shadow-2xl border border-slate-100 max-h-[95vh] overflow-y-auto">
                     <div class="flex justify-between items-center mb-5 pb-3 border-b border-slate-100">
                         <h2 class="font-heading font-extrabold text-xl">${modeTitle}</h2>
                         <button onclick="closeModal()" class="text-slate-400 hover:text-slate-900">
@@ -3074,8 +3110,8 @@
         const isEdit = state.txModal.editMode;
 
         return `
-            <div class="fixed inset-0 bg-black/60 flex items-center justify-center z-50 animate-fade-in">
-                <div class="bg-white rounded-2xl w-[460px] p-6 shadow-2xl border border-slate-100 max-h-[95vh] overflow-y-auto">
+            <div class="fixed inset-0 bg-black/60 flex items-center justify-center z-50 animate-fade-in px-4">
+                <div class="bg-white rounded-2xl w-full max-w-[460px] p-6 shadow-2xl border border-slate-100 max-h-[95vh] overflow-y-auto">
                     <div class="flex justify-between items-center mb-4 pb-3 border-b border-slate-100">
                         <h2 class="font-heading font-extrabold text-xl">${isEdit ? 'Ubah Transaksi' : 'Transaksi Baru'}</h2>
                         <button onclick="closeTxModal()" class="text-slate-400 hover:text-slate-900">
@@ -3268,7 +3304,7 @@
 
     function renderBulkModalMarkup() {
         return `
-            <div class="fixed inset-0 bg-black/60 flex items-center justify-center z-50 animate-fade-in">
+            <div class="fixed inset-0 bg-black/60 flex items-center justify-center z-50 animate-fade-in px-4">
                 <div class="bg-white rounded-2xl w-[960px] p-6 shadow-2xl border border-slate-100 max-h-[90vh] flex flex-col justify-between">
                     <div class="flex justify-between items-center mb-2 pb-3 border-b border-slate-100 shrink-0">
                         <div class="text-left">
@@ -3408,8 +3444,8 @@
         
         if (mode === 'estimate') {
             return `
-                <div class="fixed inset-0 bg-black/60 flex items-center justify-center z-50 animate-fade-in">
-                    <div class="bg-white rounded-2xl w-[400px] p-6 shadow-2xl border border-slate-100 text-left">
+                <div class="fixed inset-0 bg-black/60 flex items-center justify-center z-50 animate-fade-in px-4">
+                    <div class="bg-white rounded-2xl w-full max-w-[400px] p-6 shadow-2xl border border-slate-100 text-left">
                         <div class="flex justify-between items-center mb-5 pb-3 border-b border-slate-100">
                             <h2 class="font-heading font-extrabold text-xl">Ubah Perkiraan Pemasukan</h2>
                             <button onclick="closeBudgetModal()" class="text-slate-400 hover:text-slate-900">
@@ -3442,8 +3478,8 @@
             const currentTotal = state.tempBudgetModal.kebutuhanPct + state.tempBudgetModal.keinginanPct + state.tempBudgetModal.tabunganPct;
 
             return `
-                <div class="fixed inset-0 bg-black/60 flex items-center justify-center z-50 animate-fade-in">
-                    <div class="bg-white rounded-2xl w-[420px] p-6 shadow-2xl border border-slate-100">
+                <div class="fixed inset-0 bg-black/60 flex items-center justify-center z-50 animate-fade-in px-4">
+                    <div class="bg-white rounded-2xl w-full max-w-[420px] p-6 shadow-2xl border border-slate-100">
                         <div class="flex justify-between items-center mb-5 pb-3 border-b border-slate-100">
                             <h2 class="font-heading font-extrabold text-xl">Ubah Alokasi Anggaran</h2>
                             <button onclick="closeBudgetModal()" class="text-slate-400 hover:text-slate-900">
@@ -3507,8 +3543,8 @@
             const options = parent === 'tabungan' ? state.savingTargets : state.categoriesExpense;
 
             return `
-                <div class="fixed inset-0 bg-black/60 flex items-center justify-center z-50 animate-fade-in">
-                    <div class="bg-white rounded-2xl w-[400px] p-6 shadow-2xl border border-slate-100 text-left">
+                <div class="fixed inset-0 bg-black/60 flex items-center justify-center z-50 animate-fade-in px-4">
+                    <div class="bg-white rounded-2xl w-full max-w-[400px] p-6 shadow-2xl border border-slate-100 text-left">
                         <div class="flex justify-between items-center mb-5 pb-3 border-b border-slate-100">
                             <h2 class="font-heading font-extrabold text-xl">Tambah Subkategori</h2>
                             <button onclick="closeBudgetModal()" class="text-slate-400 hover:text-slate-900">
@@ -3547,8 +3583,8 @@
 
         if (mode === 'editSubcategory') {
             return `
-                <div class="fixed inset-0 bg-black/60 flex items-center justify-center z-50 animate-fade-in">
-                    <div class="bg-white rounded-2xl w-[400px] p-6 shadow-2xl border border-slate-100 text-left">
+                <div class="fixed inset-0 bg-black/60 flex items-center justify-center z-50 animate-fade-in px-4">
+                    <div class="bg-white rounded-2xl w-full max-w-[400px] p-6 shadow-2xl border border-slate-100 text-left">
                         <div class="flex justify-between items-center mb-5 pb-3 border-b border-slate-100">
                             <h2 class="font-heading font-extrabold text-xl">Ubah Alokasi Anggaran</h2>
                             <button onclick="closeBudgetModal()" class="text-slate-400 hover:text-slate-900">
@@ -3589,8 +3625,8 @@
         const modeTitle = state.goalModal.mode === 'add' ? 'Tambah Goal Baru' : 'Ubah Detail Goal';
         
         return `
-            <div class="fixed inset-0 bg-black/60 flex items-center justify-center z-50 animate-fade-in">
-                <div class="bg-white rounded-2xl w-[420px] p-6 shadow-2xl border border-slate-100 max-h-[95vh] overflow-y-auto">
+            <div class="fixed inset-0 bg-black/60 flex items-center justify-center z-50 animate-fade-in px-4">
+                <div class="bg-white rounded-2xl w-full max-w-[420px] p-6 shadow-2xl border border-slate-100 max-h-[95vh] overflow-y-auto">
                     <div class="flex justify-between items-center mb-5 pb-3 border-b border-slate-100">
                         <h2 class="font-heading font-extrabold text-xl">${modeTitle}</h2>
                         <button onclick="closeGoalModal()" class="text-slate-400 hover:text-slate-900">
@@ -3664,8 +3700,8 @@
         const modeTitle = mode === 'add' ? `Tambah ${type === 'utang' ? 'Utang' : 'Piutang'} Baru` : `Ubah Detail ${type === 'utang' ? 'Utang' : 'Piutang'}`;
 
         return `
-            <div class="fixed inset-0 bg-black/60 flex items-center justify-center z-50 animate-fade-in">
-                <div class="bg-white rounded-2xl w-[400px] p-6 shadow-2xl border border-slate-100 max-h-[95vh] overflow-y-auto">
+            <div class="fixed inset-0 bg-black/60 flex items-center justify-center z-50 animate-fade-in px-4">
+                <div class="bg-white rounded-2xl w-full max-w-[400px] p-6 shadow-2xl border border-slate-100 max-h-[95vh] overflow-y-auto">
                     <div class="flex justify-between items-center mb-5 pb-3 border-b border-slate-100">
                         <h2 class="font-heading font-extrabold text-xl">${modeTitle}</h2>
                         <button onclick="closeDebtModal()" class="text-slate-400 hover:text-slate-900 focus:outline-none">
@@ -3732,8 +3768,8 @@
 
     function renderConfirmDialog() {
         return `
-            <div class="fixed inset-0 bg-slate-900/60 flex items-center justify-center z-[100] animate-fade-in">
-                <div class="bg-white rounded-2xl w-[400px] p-6 shadow-2xl border border-slate-100 text-center space-y-4">
+            <div class="fixed inset-0 bg-slate-900/60 flex items-center justify-center z-[100] animate-fade-in px-4">
+                <div class="bg-white rounded-2xl w-full max-w-[400px] p-6 shadow-2xl border border-slate-100 text-center space-y-4">
                     <div class="w-12 h-12 bg-red-50 text-red-600 rounded-full flex items-center justify-center mx-auto text-xl">
                         <i class="fa-solid fa-triangle-exclamation"></i>
                     </div>
