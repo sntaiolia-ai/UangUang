@@ -42,6 +42,10 @@
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 
+    <!-- jsPDF (untuk fitur Unduh Laporan) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+
     <style>
         /* Custom scrollbar styling for premium look */
         ::-webkit-scrollbar {
@@ -1266,7 +1270,170 @@
         return `${formatDay(firstDay)} - ${formatDay(lastDay)}`;
     }
 
-    // --- STREAMING_CHUNK: Goals Wizard Handlers... ---
+    function getFullMonthLabel(monthStr) {
+        if (!monthStr) return '';
+        const parts = monthStr.split('-');
+        const year = parseInt(parts[0]);
+        const month = parseInt(parts[1]) - 1;
+        const monthsFull = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
+        return `${monthsFull[month]} ${year}`;
+    }
+
+    // --- STREAMING_CHUNK: Laporan Bulanan (PDF) ... ---
+    function downloadMonthlyReport() {
+        if (typeof window.jspdf === 'undefined') {
+            showToast('Library laporan belum termuat, coba lagi sesaat.');
+            return;
+        }
+
+        const selectedMonth = state.budget.selectedMonth;
+        const monthLabel = getFullMonthLabel(selectedMonth);
+
+        // Histori transaksi bulan aktif, urut dari tanggal terlama
+        const monthTx = state.transactions
+            .filter(tx => tx.date && tx.date.substring(0, 7) === selectedMonth)
+            .sort((a, b) => a.date.localeCompare(b.date));
+
+        // Ringkasan arus kas
+        const totalPemasukan = monthTx.filter(tx => tx.type === 'Pemasukan').reduce((s, tx) => s + tx.amount, 0);
+        const totalPengeluaran = monthTx.filter(tx => tx.type === 'Pengeluaran').reduce((s, tx) => s + tx.amount, 0);
+        const totalTabungan = monthTx.filter(tx => tx.type === 'Tabungan').reduce((s, tx) => s + tx.amount, 0);
+        const netCashflow = totalPemasukan - totalPengeluaran;
+
+        // Analisis alokasi Kebutuhan / Keinginan / Tabungan (sama seperti logika dashboard)
+        const estimate = state.budget.incomeEstimate || 0;
+        const kebutuhanSub = state.budget.subcategories.filter(s => s.categoryParent === 'kebutuhan');
+        const keinginanSub = state.budget.subcategories.filter(s => s.categoryParent === 'keinginan');
+        const tabunganSub = state.budget.subcategories.filter(s => s.categoryParent === 'tabungan');
+
+        const kebutuhanAlloc = Math.round((state.budget.kebutuhanPct / 100) * estimate);
+        const keinginanAlloc = Math.round((state.budget.keinginanPct / 100) * estimate);
+        const tabunganAlloc = Math.round((state.budget.tabunganPct / 100) * estimate);
+
+        const kebutuhanSpent = kebutuhanSub.reduce((s, sub) => s + getAccumulatedSpend(sub.name, 'kebutuhan'), 0);
+        const keinginanSpent = keinginanSub.reduce((s, sub) => s + getAccumulatedSpend(sub.name, 'keinginan'), 0);
+        const tabunganSpent = tabunganSub.reduce((s, sub) => s + getAccumulatedSpend(sub.name, 'tabungan'), 0);
+
+        // Top 5 kategori pengeluaran terbesar bulan ini
+        const spendByCategory = {};
+        monthTx.filter(tx => tx.type === 'Pengeluaran').forEach(tx => {
+            spendByCategory[tx.category] = (spendByCategory[tx.category] || 0) + tx.amount;
+        });
+        const topCategories = Object.entries(spendByCategory)
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 5);
+
+        // --- Bangun dokumen PDF ---
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF();
+        const pageWidth = doc.internal.pageSize.getWidth();
+        let y = 18;
+
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(16);
+        doc.text('Laporan Keuangan Budggt', 14, y);
+        y += 7;
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(10);
+        doc.setTextColor(100);
+        doc.text(`Periode: ${monthLabel}`, 14, y);
+        doc.text(`Dibuat oleh: ${currentUserProfile.name || 'Pengguna'}`, pageWidth - 14, y, { align: 'right' });
+        doc.setTextColor(0);
+        y += 8;
+
+        // Ringkasan
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(12);
+        doc.text('Ringkasan Arus Kas', 14, y);
+        y += 2;
+        doc.autoTable({
+            startY: y,
+            theme: 'grid',
+            styles: { fontSize: 9, cellPadding: 3 },
+            headStyles: { fillColor: [20, 20, 20] },
+            head: [['Total Pemasukan', 'Total Pengeluaran', 'Total Tabungan', 'Selisih Bersih']],
+            body: [[
+                formatRp(totalPemasukan),
+                formatRp(totalPengeluaran),
+                formatRp(totalTabungan),
+                formatRp(netCashflow)
+            ]]
+        });
+        y = doc.lastAutoTable.finalY + 10;
+
+        // Analisis alokasi budget
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(12);
+        doc.text('Analisis Alokasi Budget', 14, y);
+        y += 2;
+        const pct = (spent, alloc) => alloc > 0 ? Math.round((spent / alloc) * 100) + '%' : '-';
+        doc.autoTable({
+            startY: y,
+            theme: 'grid',
+            styles: { fontSize: 9, cellPadding: 3 },
+            headStyles: { fillColor: [20, 20, 20] },
+            head: [['Kategori', 'Alokasi', 'Terpakai', '% Terpakai']],
+            body: [
+                ['Kebutuhan', formatRp(kebutuhanAlloc), formatRp(kebutuhanSpent), pct(kebutuhanSpent, kebutuhanAlloc)],
+                ['Keinginan', formatRp(keinginanAlloc), formatRp(keinginanSpent), pct(keinginanSpent, keinginanAlloc)],
+                ['Tabungan', formatRp(tabunganAlloc), formatRp(tabunganSpent), pct(tabunganSpent, tabunganAlloc)]
+            ]
+        });
+        y = doc.lastAutoTable.finalY + 10;
+
+        // Top 5 kategori pengeluaran
+        if (topCategories.length > 0) {
+            doc.setFont('helvetica', 'bold');
+            doc.setFontSize(12);
+            doc.text('Top Kategori Pengeluaran', 14, y);
+            y += 2;
+            doc.autoTable({
+                startY: y,
+                theme: 'grid',
+                styles: { fontSize: 9, cellPadding: 3 },
+                headStyles: { fillColor: [20, 20, 20] },
+                head: [['Kategori', 'Total Pengeluaran']],
+                body: topCategories.map(([cat, amt]) => [cat, formatRp(amt)])
+            });
+            y = doc.lastAutoTable.finalY + 10;
+        }
+
+        // Histori transaksi lengkap
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(12);
+        doc.text('Histori Transaksi', 14, y);
+        y += 2;
+
+        if (monthTx.length > 0) {
+            doc.autoTable({
+                startY: y,
+                theme: 'striped',
+                styles: { fontSize: 8, cellPadding: 2.5 },
+                headStyles: { fillColor: [20, 20, 20] },
+                head: [['Tanggal', 'Tipe', 'Kategori', 'Dompet', 'Catatan', 'Jumlah']],
+                body: monthTx.map(tx => {
+                    const wallet = state.wallets.find(w => w.id === tx.walletId);
+                    return [
+                        tx.date,
+                        tx.type,
+                        tx.category || '-',
+                        wallet ? wallet.name : '-',
+                        tx.notes || '-',
+                        formatRp(tx.amount)
+                    ];
+                })
+            });
+        } else {
+            doc.setFont('helvetica', 'normal');
+            doc.setFontSize(9);
+            doc.text('Belum ada transaksi pada bulan ini.', 14, y + 4);
+        }
+
+        doc.save(`Laporan-Budggt-${selectedMonth}.pdf`);
+        showToast('Laporan berhasil diunduh 📄');
+    }
+
+
     window.openGoalDetail = function(id) {
         state.goalDetailId = id;
         render();
@@ -1558,10 +1725,20 @@
                         <h1 class="font-heading font-extrabold text-3xl tracking-tight text-brand-textDark">Dashboard</h1>
                         <p class="text-brand-textMuted text-xs mt-0.5 font-semibold">Halo, ${currentUserProfile.name || 'Pengguna'} 🍌</p>
                     </div>
-                    <!-- ACTIVE PERIOD -->
-                    <div class="bg-white border border-brand-border px-3.5 py-1.5 rounded-xl shadow-sm flex items-center gap-2">
-                        <i class="fa-solid fa-calendar-check text-[#bcfd1c] text-xs"></i>
-                        <span class="text-[10px] font-extrabold text-slate-500 tracking-wider uppercase">ACTIVE PERIOD: <strong class="text-slate-800">${getMonthRangeLabel(selectedMonth)}</strong></span>
+                    <!-- ACTIVE PERIOD + DOWNLOAD REPORT -->
+                    <div class="flex items-center gap-2">
+                        <div class="bg-white border border-brand-border px-3.5 py-1.5 rounded-xl shadow-sm flex items-center gap-2">
+                            <i class="fa-solid fa-calendar-check text-[#bcfd1c] text-xs"></i>
+                            <span class="text-[10px] font-extrabold text-slate-500 tracking-wider uppercase">ACTIVE PERIOD: <strong class="text-slate-800">${getMonthRangeLabel(selectedMonth)}</strong></span>
+                        </div>
+                        <button
+                            onclick="downloadMonthlyReport()"
+                            title="Unduh laporan bulan ini"
+                            class="bg-slate-900 hover:bg-slate-800 text-white px-3.5 py-1.5 rounded-xl shadow-sm flex items-center gap-2 transition-all"
+                        >
+                            <i class="fa-solid fa-file-arrow-down text-[#bcfd1c] text-xs"></i>
+                            <span class="text-[10px] font-extrabold tracking-wider uppercase">Unduh Laporan</span>
+                        </button>
                     </div>
                 </div>
 
